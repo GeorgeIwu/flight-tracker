@@ -10,8 +10,8 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/labstack/echo/v4"
 
-	"servicecatalog/ent"
-	"servicecatalog/service"
+	"service-catalog/ent"
+	"service-catalog/service"
 )
 
 

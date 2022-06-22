@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
-	"servicecatalog/ent"
-	"servicecatalog/ent/predicate"
-	"servicecatalog/ent/service"
+	"service-catalog/ent"
+	"service-catalog/ent/predicate"
+	"service-catalog/ent/service"
 	"time"
 )
 
