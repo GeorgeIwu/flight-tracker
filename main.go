@@ -11,13 +11,23 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"service-catalog/ent"
+	"service-catalog/middleware"
 	"service-catalog/service"
 )
 
+//move to environment variable
+const (
+	dbHost     = "localhost"
+	dbUser     = "kong"
+	dbPassword = "password"
+	dbType    = "mysql"
+	dbProtocol = "tcp"
+	dbName = "catalog"
+)
 
 func main() {
-	e := echo.New()
-	client, err := ent.Open("mysql", "kong:password@tcp(localhost)/catalog?parseTime=True")
+	sqlInfo := fmt.Sprintf("%s:%s@%s(%s)/%s?parseTime=True", dbUser, dbPassword, dbProtocol, dbHost, dbName)
+	client, err := ent.Open(dbType, sqlInfo)
 	if err != nil {
 			log.Fatalf("failed opening connection to sqlite: %v", err)
 	}
@@ -27,9 +37,13 @@ func main() {
 			log.Fatalf("failed creating schema resources: %v", err)
 	}
 
+	e := echo.New()
+	middL := middleware.InitMiddleware()
+	e.Use(middL.Auth)
 	timeoutContext := time.Duration(60) * time.Second
-	uc := service.NewServiceUsecase(client, timeoutContext)
-	service.NewServiceHandler(e, uc)
+	repo := service.NewServiceRepo(client, timeoutContext)
+	usecase := service.NewServiceUsecase(repo)
+	service.NewServiceHandler(e, usecase)
 
 
 	fmt.Printf("Running app on port 8000")

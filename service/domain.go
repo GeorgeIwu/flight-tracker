@@ -2,12 +2,13 @@ package service
 
 import (
 	"context"
+	"service-catalog/ent"
 	"time"
 )
 
 // Service ...
 type Service struct {
-	ID          int64     `json:"id"`
+	ID          int     `json:"id"`
 	Title       string    `json:"title" validate:"required"`
 	Description string    `json:"description" validate:"required"`
 	Versions    int       `json:"versions" validate:"required"`
@@ -39,7 +40,17 @@ type ServiceInterface interface {
 	FetchByID(c context.Context, id int) (res *Service, err error)
 	Create(c context.Context, attributes ServiceRequest) (res *Service, err error)
 	Update(c context.Context, serviceID int, r ServiceRequest) (res *Service, err error)
-	Delete(c context.Context, serviceID int) (err error)
+	Remove(c context.Context, serviceID int) (err error)
 	FetchVersions(c context.Context, serviceID int) (res []*Version, err error)
 	CreateVersion(c context.Context, serviceID int, r VersionRequest) (res *Service, err error)
+}
+
+type ServiceRepoInterface interface {
+	Get(ctx context.Context, searchBy string, sortBy string, pageOffset int, itemsPerPage int) (res []*ent.Service, err error)
+	GetByID(c context.Context, id int) (res *ent.Service, err error)
+	Create(c context.Context, attributes ServiceRequest) (res *ent.Service, err error)
+	Update(c context.Context, serviceID int, r ServiceRequest) (res *ent.Service, err error)
+	Delete(c context.Context, serviceID int) (err error)
+	GetVersions(c context.Context, serviceID int) (res []*ent.Version, err error)
+	CreateVersion(c context.Context, serviceID int, r VersionRequest) (res *ent.Service, err error)
 }

@@ -32,7 +32,7 @@ var (
 )
 
 // NewServiceHandler will initialize the Services/ resources endpoint
-func NewServiceHandler(e *echo.Echo, is ServiceInterface) {
+func NewServiceHandler(e *echo.Echo, is ServiceInterface) *ServiceHandler {
 	handler := &ServiceHandler{
 		usecase: is,
 	}
@@ -44,6 +44,7 @@ func NewServiceHandler(e *echo.Echo, is ServiceInterface) {
 	e.DELETE("/services/:id", handler.Delete)
 	e.POST("/services/:id/versions", handler.CreateVersion)
 	e.GET("/services/:id/versions", handler.FetchVersions)
+	return handler
 }
 
 // FetchService will fetch the Service based on given params
@@ -142,7 +143,7 @@ func (a *ServiceHandler) Delete(c echo.Context) (err error) {
 		return c.JSON(http.StatusUnprocessableEntity, err.Error())
 	}
 
-	err = a.usecase.Delete(ctx, serviceID)
+	err = a.usecase.Remove(ctx, serviceID)
 	if err != nil {
 		return c.JSON(getStatusCode(err), ResponseError{Message: err.Error()})
 	}

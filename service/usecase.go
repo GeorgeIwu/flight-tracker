@@ -4,40 +4,23 @@ import (
 	"context"
 	"fmt"
 	"service-catalog/ent"
-	"service-catalog/ent/predicate"
 	"service-catalog/ent/service"
-	"time"
 )
 
 type ServiceUsecase struct {
-	client         *ent.Client
-	contextTimeout time.Duration
+	repo         ServiceRepoInterface
 }
 
 // NewServiceUsecase will create new an ServiceUsecase object representation of ServiceInterface
-func NewServiceUsecase(c *ent.Client, timeout time.Duration) *ServiceUsecase {
+func NewServiceUsecase(r ServiceRepoInterface) *ServiceUsecase {
 	return &ServiceUsecase{
-		client:         c,
-		contextTimeout: timeout,
+		repo:         r,
 	}
 }
 
 func (u *ServiceUsecase) Fetch(ctx context.Context, searchBy string, sortBy string, pageNumber int, itemsPerPage int) (res []*Service, err error) {
-	ctx, cancel := context.WithTimeout(ctx, u.contextTimeout)
-	defer cancel()
-
 	pageOffset := (pageNumber - 1) * itemsPerPage
-	serviceEntities, err := u.client.Service.Query().
-		Where(
-			service.Or(
-				service.TitleContains(searchBy),
-				service.DescriptionContains(searchBy),
-			),
-		).
-		Offset(pageOffset).
-		Limit(itemsPerPage).
-		Order(ent.Desc(getSortType(sortBy))).
-		All(ctx)
+	serviceEntities, err := u.repo.Get(ctx, searchBy, sortBy, pageOffset, itemsPerPage)
 	if err != nil {
 		return nil, err
 	}
@@ -51,11 +34,9 @@ func (u *ServiceUsecase) Fetch(ctx context.Context, searchBy string, sortBy stri
 	return services, nil
 }
 
-func (u *ServiceUsecase) FetchByID(c context.Context, id int) (res *Service, err error) {
-	ctx, cancel := context.WithTimeout(c, u.contextTimeout)
-	defer cancel()
+func (u *ServiceUsecase) FetchByID(ctx context.Context, id int) (res *Service, err error) {
 
-	serviceEntity, err := u.client.Service.Get(ctx, id)
+	serviceEntity, err := u.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -69,82 +50,40 @@ func (u *ServiceUsecase) FetchByID(c context.Context, id int) (res *Service, err
 }
 
 func (u *ServiceUsecase) Create(c context.Context, r ServiceRequest) (res *Service, err error) {
-	ctx, cancel := context.WithTimeout(c, u.contextTimeout)
-	tx, err := u.client.Tx(ctx)
-	defer cancel()
-
-	// Create a version.
-	version, err := tx.Version.Create().Save(ctx)
+	serviceEntity, err := u.repo.Create(c, r)
 	if err != nil {
-		return nil, rollback(tx, err)
-	}
-	fmt.Println("version was created: ", version)
-
-	// Create a new Service.
-	serviceEntity, err := tx.Service.
-		Create().
-		SetTitle(r.Title).
-		SetDescription(r.Description).
-		SetVersionCount(1).
-		SetUpdatedAt(time.Now()).
-		SetCreatedAt(time.Now()).
-		AddVersions(version).
-		Save(ctx)
-	if err != nil {
-		return nil, rollback(tx, err)
+		return nil, err
 	}
 
-	service, err := mapService(ctx, serviceEntity)
+	service, err := mapService(c, serviceEntity)
 	if err != nil {
-		return nil, rollback(tx, err)
+		return nil, err
 	}
-	tx.Commit()
 	fmt.Println("service was created: ", service)
 
 	return service, nil
 }
 
 func (u *ServiceUsecase) Update(c context.Context, serviceID int, r ServiceRequest) (res *Service, err error) {
-	ctx, cancel := context.WithTimeout(c, u.contextTimeout)
-	tx, err := u.client.Tx(ctx)
-	defer cancel()
 
-	existingService, err := tx.Service.Get(ctx, serviceID)
-	if existingService == nil {
+	// Update the Service.
+	serviceEntity, err := u.repo.Update(c, serviceID, r)
+	if err != nil {
 		return nil, err
 	}
 
-	// Update the Service.
-	serviceEntity, err := tx.Service.UpdateOneID(serviceID).
-		SetTitle(r.Title).
-		SetDescription(r.Description).
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
+	service, err := mapService(c, serviceEntity)
 	if err != nil {
-		return nil, rollback(tx, err)
+		return nil, err
 	}
-
-	service, err := mapService(ctx, serviceEntity)
-	if err != nil {
-		return nil, rollback(tx, err)
-	}
-	tx.Commit()
 	fmt.Println("version was created: ", service)
 
 	return service, nil
 }
 
-func (u *ServiceUsecase) Delete(c context.Context, serviceID int) (err error) {
-	ctx, cancel := context.WithTimeout(c, u.contextTimeout)
-	defer cancel()
+func (u *ServiceUsecase) Remove(c context.Context, serviceID int) (err error) {
 
-	existingService, err := u.client.Service.Get(ctx, serviceID)
-	if existingService == nil {
-		return err
-	}
-
-	// Delete the Service.
-	newerr := u.client.Service.DeleteOneID(serviceID).Exec(ctx)
+	newerr := u.repo.Delete(c, serviceID)
 	if newerr != nil {
 		return newerr
 	}
@@ -155,13 +94,8 @@ func (u *ServiceUsecase) Delete(c context.Context, serviceID int) (err error) {
 }
 
 func (u *ServiceUsecase) FetchVersions(c context.Context, serviceID int) (res []*Version, err error) {
-	ctx, cancel := context.WithTimeout(c, u.contextTimeout)
-	defer cancel()
 
-	versionEntities, err := u.client.Version.Query().
-		Where(
-			predicate.Version(service.ID(serviceID)),
-		).All(ctx)
+	versionEntities, err := u.repo.GetVersions(c, serviceID)
 	if versionEntities == nil {
 		return nil, err
 	}
@@ -180,33 +114,16 @@ func (u *ServiceUsecase) FetchVersions(c context.Context, serviceID int) (res []
 }
 
 func (u *ServiceUsecase) CreateVersion(c context.Context, serviceID int, r VersionRequest) (res *Service, err error) {
-	ctx, cancel := context.WithTimeout(c, u.contextTimeout)
-	tx, err := u.client.Tx(ctx)
-	defer cancel()
 
-	existingService, err := tx.Service.Get(ctx, serviceID)
-	if existingService == nil {
+	serviceEntity, err := u.repo.CreateVersion(c, serviceID, r)
+	if err != nil {
 		return nil, err
 	}
 
-	// Create a version.
-	version, err := tx.Version.Create().SetName(r.Name).Save(ctx)
+	service, err := mapService(c, serviceEntity)
 	if err != nil {
-		return nil, rollback(tx, err)
+		return nil, err
 	}
-	fmt.Println("version was created: ", version)
-
-	// Update the Service.
-	serviceEntity, err := tx.Service.UpdateOneID(serviceID).SetVersionCount(existingService.VersionCount + 1).Save(ctx)
-	if err != nil {
-		return nil, rollback(tx, err)
-	}
-
-	service, err := mapService(ctx, serviceEntity)
-	if err != nil {
-		return nil, rollback(tx, err)
-	}
-	tx.Commit()
 	fmt.Println("version was created: ", service)
 
 	return service, nil
@@ -215,7 +132,7 @@ func (u *ServiceUsecase) CreateVersion(c context.Context, serviceID int, r Versi
 func mapService(c context.Context, data *ent.Service) (*Service, error) {
 
 	newservice := &Service{
-		ID:          int64(data.ID),
+		ID:          data.ID,
 		Title:       data.Title,
 		Description: data.Description,
 		Versions:    data.VersionCount,
@@ -238,9 +155,3 @@ func getSortType(sort string) string {
 	}
 }
 
-func rollback(tx *ent.Tx, err error) error {
-	if rerr := tx.Rollback(); rerr != nil {
-		err = fmt.Errorf("%w: %v", err, rerr)
-	}
-	return err
-}
