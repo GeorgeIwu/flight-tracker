@@ -3,13 +3,5 @@ vendor/
 _*
 *.test
 .DS_Store
-engine
+.idea
 bin/
-ent/enttest/
-ent/hook/
-ent/migrate/
-ent/predicate/
-ent/runtime/
-ent/service/
-ent/version/
-ent/*.go
